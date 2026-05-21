@@ -27,4 +27,4 @@ model:
   freeze_llm: true
   use_reprogramming: true
   num_virtual_prompt_tokens: 8
-
+  num_source_tokens: 1000

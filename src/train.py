@@ -51,6 +51,7 @@ def build_model(cfg: dict, num_nodes: int) -> torch.nn.Module:
             freeze_llm=bool(model_cfg.get("freeze_llm", True)),
             use_reprogramming=bool(model_cfg.get("use_reprogramming", False)),
             num_virtual_prompt_tokens=int(model_cfg.get("num_virtual_prompt_tokens", 8)),
+            num_source_tokens=int(model_cfg.get("num_source_tokens", 1000)),
         )
     raise NotImplementedError(f"Model is not implemented: {name}")
 

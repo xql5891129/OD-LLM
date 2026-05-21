@@ -12,7 +12,7 @@ Current stage:
 - Unified forecasting metrics
 
 The first runnable model intentionally avoids an LLM backbone. It validates the OD data pipeline,
-latent tokenizer, decoder, loss, and metrics before adding GPT-2 / Time-LLM style adapters.
+latent tokenizer, decoder, loss, and metrics before adding Qwen / DeepSeek / Time-LLM style adapters.
 
 ## Environment With uv
 
@@ -29,7 +29,7 @@ Then run commands inside the uv environment:
 
 ```bash
 uv run python scripts/generate_toy_data.py --output data/toy/od.npy
-uv run python src/train.py --config configs/default.yaml
+uv run --no-sync python src/train.py --config configs/default.yaml
 ```
 
 One-click setup plus model download:
@@ -52,6 +52,32 @@ Linux/macOS:
 bash scripts/setup_env.sh --model qwen2.5-1.5b --provider huggingface
 ```
 
+GPU server setup for RTX 5090D / CUDA 13.1 driver:
+
+```powershell
+.\scripts\setup_env.ps1 -SkipModel -TorchBackend cu130
+.\scripts\setup_env.ps1 -Model qwen2.5-1.5b -Provider huggingface -TorchBackend cu130
+```
+
+Linux:
+
+```bash
+bash scripts/setup_env.sh --skip-model --torch-backend cu130
+bash scripts/setup_env.sh --model qwen2.5-1.5b --provider huggingface --torch-backend cu130
+```
+
+`nvidia-smi` reports the maximum CUDA runtime supported by the driver. A
+CUDA 13.1 driver can run a PyTorch `cu130` wheel. If your package mirror does
+not yet provide `cu130`, use `cu128`:
+
+```powershell
+.\scripts\setup_env.ps1 -SkipModel -TorchBackend cu128
+```
+
+After installing a CUDA torch wheel with the setup script, prefer `uv run
+--no-sync ...` for experiments. This prevents uv from re-syncing the lockfile
+and replacing the CUDA wheel with the default CPU wheel.
+
 For users in mainland China, ModelScope may be smoother:
 
 ```powershell
@@ -61,7 +87,7 @@ For users in mainland China, ModelScope may be smoother:
 Supported model keys:
 
 ```bash
-uv run python scripts/download_model.py --print-registry
+uv run --no-sync python scripts/download_model.py --print-registry
 ```
 
 If you use Qwen or DeepSeek, put the model on disk and set `pretrained_path` in
@@ -73,21 +99,21 @@ downloads.
 
 ```bash
 cd OD-LLM
-python scripts/generate_toy_data.py --output data/toy/od.npy
-python src/train.py --config configs/default.yaml
-python src/evaluate.py --config configs/default.yaml --checkpoint outputs/od_tensor_transformer_toy/checkpoints/best.pt
+uv run --no-sync python scripts/generate_toy_data.py --output data/toy/od.npy
+uv run --no-sync python src/train.py --config configs/default.yaml
+uv run --no-sync python src/evaluate.py --config configs/default.yaml --checkpoint outputs/od_tensor_transformer_toy/checkpoints/best.pt
 ```
 
 Offline OD-LLM smoke test:
 
 ```bash
-python src/train.py --config configs/od_llm_tiny.yaml
+uv run --no-sync python src/train.py --config configs/od_llm_tiny.yaml
 ```
 
 Collect all finished run metrics:
 
 ```bash
-python src/compare.py --root outputs --output outputs/comparison.csv
+uv run --no-sync python src/compare.py --root outputs --output outputs/comparison.csv
 ```
 
 `configs/od_llm_qwen.yaml` and `configs/od_llm_deepseek.yaml` are reserved for
@@ -119,7 +145,7 @@ y = OD[t:t+pred_len]        shape [H, N, N]
 ## Roadmap
 
 1. Minimal OD tensor tokenizer + Transformer baseline.
-2. GPT-2 / Time-LLM adapter over OD latent tokens.
+2. Qwen / DeepSeek / Time-LLM adapter over OD latent tokens.
 3. Baselines and ablations.
 4. Latent-space analysis and basis heatmaps.
 5. Explanation prompt generation.

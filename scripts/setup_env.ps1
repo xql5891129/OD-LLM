@@ -4,7 +4,9 @@ param(
     [string]$Provider = "huggingface",
     [string]$OutputDir = "hf_models",
     [switch]$SkipModel,
-    [int]$LlmLayers = 6
+    [int]$LlmLayers = 6,
+    [ValidateSet("skip", "cpu", "cu128", "cu130")]
+    [string]$TorchBackend = "cu130"
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,15 +33,23 @@ function Invoke-Checked {
 }
 
 Write-Host "Syncing Python environment with uv..."
-if ($SkipModel) {
-    Invoke-Checked { uv sync }
+Invoke-Checked { uv sync --extra download }
+
+if ($TorchBackend -ne "skip") {
+    $TorchIndex = switch ($TorchBackend) {
+        "cpu" { "https://download.pytorch.org/whl/cpu" }
+        "cu128" { "https://download.pytorch.org/whl/cu128" }
+        "cu130" { "https://download.pytorch.org/whl/cu130" }
+    }
+    Write-Host "Installing PyTorch backend '$TorchBackend' from $TorchIndex ..."
+    Invoke-Checked { uv pip install --reinstall torch torchvision torchaudio --index-url $TorchIndex }
 } else {
-    Invoke-Checked { uv sync --extra download }
+    Write-Host "Skipping explicit PyTorch backend installation."
 }
 
 if (-not $SkipModel) {
     Write-Host "Downloading model '$Model' from '$Provider'..."
-    Invoke-Checked { uv run python scripts/download_model.py `
+    Invoke-Checked { uv run --no-sync python scripts/download_model.py `
         --model $Model `
         --provider $Provider `
         --output-dir $OutputDir `
@@ -49,10 +59,13 @@ if (-not $SkipModel) {
 }
 
 Write-Host "Running a quick compile check..."
-Invoke-Checked { uv run python -m compileall src }
+Invoke-Checked { uv run --no-sync python -m compileall src scripts }
+
+Write-Host "Checking PyTorch CUDA visibility..."
+Invoke-Checked { uv run --no-sync python scripts/check_cuda.py }
 
 Write-Host ""
 Write-Host "Setup finished."
 Write-Host "Try a smoke test:"
-Write-Host "  uv run python scripts/generate_toy_data.py --output data/toy/od.npy"
-Write-Host "  uv run python src/train.py --config configs/od_llm_tiny.yaml"
+Write-Host "  uv run --no-sync python scripts/generate_toy_data.py --output data/toy/od.npy"
+Write-Host "  uv run --no-sync python src/train.py --config configs/od_llm_tiny.yaml"

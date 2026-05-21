@@ -80,10 +80,14 @@ class ReprogrammingLayer(nn.Module):
         source_len, _ = source_embedding.shape
         heads = self.n_heads
 
-        # Align dtype with projection weights (LLM embeddings may be BFloat16)
+        # target_embedding: [B, S, d_model]
+        # source_embedding: [V, d_llm]
+        # HuggingFace checkpoints may expose BFloat16 embeddings while this
+        # trainable adapter is initialized in Float32.
         target_dtype = self.query_projection.weight.dtype
-        target_embedding = target_embedding.to(target_dtype)
-        source_embedding = source_embedding.to(target_dtype)
+        source_dtype = self.key_projection.weight.dtype
+        target_embedding = target_embedding.to(device=self.query_projection.weight.device, dtype=target_dtype)
+        source_embedding = source_embedding.to(device=self.key_projection.weight.device, dtype=source_dtype)
 
         query = self.query_projection(target_embedding).view(bsz, target_len, heads, -1)
         key = self.key_projection(source_embedding).view(source_len, heads, -1)
@@ -94,4 +98,3 @@ class ReprogrammingLayer(nn.Module):
         attn = self.dropout(torch.softmax(scale * scores, dim=-1))
         out = torch.einsum("bhls,she->blhe", attn, value).reshape(bsz, target_len, -1)
         return self.out_projection(out)
-

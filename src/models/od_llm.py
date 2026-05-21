@@ -43,6 +43,7 @@ class ODLLM(nn.Module):
         freeze_llm: bool = True,
         use_reprogramming: bool = False,
         num_virtual_prompt_tokens: int = 8,
+        num_source_tokens: int = 1000,
     ):
         super().__init__()
         self.num_nodes = num_nodes
@@ -53,6 +54,7 @@ class ODLLM(nn.Module):
         self.llm_dim = llm_dim
         self.use_reprogramming = use_reprogramming
         self.num_virtual_prompt_tokens = num_virtual_prompt_tokens
+        self.num_source_tokens = num_source_tokens
 
         token_count = input_len * rank * rank
         full_seq_len = token_count + num_virtual_prompt_tokens
@@ -78,8 +80,10 @@ class ODLLM(nn.Module):
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             max_seq_len=full_seq_len,
+            num_source_tokens=num_source_tokens,
         )
         self.llm_dim = real_llm_dim
+        self.llm_dtype = self._infer_model_dtype(self.llm_model)
 
         if freeze_llm:
             for param in self.llm_model.parameters():
@@ -116,6 +120,7 @@ class ODLLM(nn.Module):
         dim_feedforward: int,
         dropout: float,
         max_seq_len: int,
+        num_source_tokens: int,
     ):
         if not pretrained:
             backbone = MiniGPTBackbone(
@@ -143,8 +148,8 @@ class ODLLM(nn.Module):
             trust_remote_code=trust_remote_code,
         )
         self._try_set_num_layers(config, llm_layers)
-        config.output_hidden_states = True
-        config.output_attentions = True
+        config.output_hidden_states = False
+        config.output_attentions = False
         backbone = AutoModel.from_pretrained(
             model_name_or_path,
             config=config,
@@ -152,7 +157,7 @@ class ODLLM(nn.Module):
             trust_remote_code=trust_remote_code,
         )
         hidden_size = self._infer_hidden_size(config, backbone)
-        source_embeddings = backbone.get_input_embeddings().weight.detach()
+        source_embeddings = backbone.get_input_embeddings().weight[:num_source_tokens].detach().float()
         return backbone, hidden_size, source_embeddings
 
     @staticmethod
@@ -171,6 +176,13 @@ class ODLLM(nn.Module):
         emb = model.get_input_embeddings()
         return int(emb.embedding_dim)
 
+    @staticmethod
+    def _infer_model_dtype(model: nn.Module) -> torch.dtype:
+        try:
+            return next(model.parameters()).dtype
+        except StopIteration:
+            return torch.float32
+
     def _adapt_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
         if isinstance(self.input_adapter, ReprogrammingLayer):
             return self.input_adapter(tokens, self.source_embeddings)
@@ -182,9 +194,8 @@ class ODLLM(nn.Module):
 
         prompt = self.virtual_prompt.unsqueeze(0).expand(x.shape[0], -1, -1)
         llm_input = torch.cat([prompt, llm_tokens], dim=1)
-        # Align input dtype with LLM weights
-        llm_dtype = next(self.llm_model.parameters()).dtype
-        llm_input = llm_input.to(llm_dtype)
+        # llm_input: [B, prompt+L*r*r, llm_dim]. Align dtype with LLM weights.
+        llm_input = llm_input.to(self.llm_dtype)
         hidden = self._last_hidden_state(self.llm_model(inputs_embeds=llm_input)).float()
         hidden_tokens = hidden[:, self.num_virtual_prompt_tokens :, :]
 

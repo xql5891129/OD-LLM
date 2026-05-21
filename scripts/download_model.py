@@ -110,6 +110,7 @@ model:
   freeze_llm: true
   use_reprogramming: true
   num_virtual_prompt_tokens: 8
+  num_source_tokens: 1000
 """
     config_output.parent.mkdir(parents=True, exist_ok=True)
     config_output.write_text(config_text, encoding="utf-8")
@@ -153,7 +154,7 @@ def main() -> None:
 
     print(f"Downloaded {args.model} to: {local_path.resolve()}")
     print(f"Wrote OD-LLM config to: {config_output.resolve()}")
-    print(f"Train with: uv run python src/train.py --config {config_output.as_posix()}")
+    print(f"Train with: uv run --no-sync python src/train.py --config {config_output.as_posix()}")
 
 
 if __name__ == "__main__":
