@@ -1,0 +1,26 @@
+inherits: default.yaml
+
+experiment:
+  name: od_llm_tiny_toy
+
+train:
+  epochs: 3
+  learning_rate: 0.001
+
+model:
+  name: od_llm
+  rank: 4
+  d_model: 64
+  n_heads: 4
+  num_layers: 2
+  dim_feedforward: 128
+  dropout: 0.1
+  max_tokens: 4096
+  llm_model: mini_gpt
+  llm_dim: 64
+  llm_layers: 2
+  llm_heads: 4
+  pretrained: false
+  freeze_llm: false
+  use_reprogramming: false
+  num_virtual_prompt_tokens: 4

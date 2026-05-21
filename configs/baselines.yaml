@@ -1,0 +1,11 @@
+experiments:
+  - name: od_tensor_transformer
+    model:
+      name: od_tensor_transformer
+  - name: lstm_baseline
+    model:
+      name: lstm_baseline
+  - name: transformer_flatten
+    model:
+      name: transformer_flatten
+

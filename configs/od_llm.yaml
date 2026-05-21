@@ -1,0 +1,20 @@
+inherits: default.yaml
+
+experiment:
+  name: od_llm_qwen
+
+model:
+  name: od_llm
+  rank: 4
+  d_model: 64
+  llm_model: qwen
+  llm_dim: 1536
+  llm_layers: 6
+  llm_heads: 12
+  pretrained: true
+  pretrained_path: Qwen/Qwen2.5-1.5B
+  local_files_only: true
+  trust_remote_code: true
+  freeze_llm: true
+  use_reprogramming: true
+  num_virtual_prompt_tokens: 8
