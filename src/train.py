@@ -129,6 +129,7 @@ def run_epoch(
     else:
         model.eval()
 
+    collect_metrics = (not train) or bool(cfg["train"].get("compute_train_metrics", False))
     losses = []
     preds = []
     trues = []
@@ -171,10 +172,14 @@ def run_epoch(
                     optimizer.step()
 
         losses.append(float(loss.detach().cpu().item()))
-        preds.append(pred.detach().cpu())
-        trues.append(y.detach().cpu())
-        y_times.append(batch["y_time"].detach().cpu())
+        if collect_metrics:
+            preds.append(pred.detach().cpu())
+            trues.append(y.detach().cpu())
+            y_times.append(batch["y_time"].detach().cpu())
         iterator.set_postfix(loss=f"{losses[-1]:.4f}", **parts)
+
+    if not collect_metrics:
+        return sum(losses) / max(len(losses), 1), {}
 
     pred_all = torch.cat(preds, dim=0)
     true_all = torch.cat(trues, dim=0)

@@ -17,6 +17,7 @@ train:
   epochs: 50
   learning_rate: 0.001
   patience: 10
+  compute_train_metrics: false
 
 model:
   name: od_tensor_transformer
@@ -26,4 +27,3 @@ model:
   num_layers: 2
   dim_feedforward: 128
   dropout: 0.1
-

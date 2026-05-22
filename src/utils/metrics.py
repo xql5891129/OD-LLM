@@ -18,6 +18,7 @@ def compute_metrics(
     y_time: torch.Tensor | None = None,
     topk: int = 20,
     high_flow_quantile: float = 0.9,
+    high_flow_max_samples: int = 1_000_000,
     zero_threshold: float = 0.0,
     pred_positive_threshold: float = 0.5,
     peak_hours: tuple[int, ...] = (7, 8, 9, 17, 18, 19),
@@ -55,7 +56,21 @@ def compute_metrics(
 
     positive_true = true[true > zero_threshold]
     if positive_true.numel() > 0:
-        threshold = torch.quantile(positive_true, high_flow_quantile)
+        threshold_source = positive_true
+        if high_flow_max_samples > 0 and positive_true.numel() > high_flow_max_samples:
+            # `torch.quantile` has tensor-size limits on large MetroFlow arrays.
+            # Use a deterministic uniform sample for the threshold, then score
+            # high-flow MAE on the full tensor.
+            sample_idx = torch.linspace(
+                0,
+                positive_true.numel() - 1,
+                steps=int(high_flow_max_samples),
+                dtype=torch.long,
+            )
+            threshold_source = positive_true[sample_idx]
+        q = min(max(float(high_flow_quantile), 0.0), 1.0)
+        kth = max(1, min(threshold_source.numel(), int(math.ceil(q * threshold_source.numel()))))
+        threshold = torch.kthvalue(threshold_source, kth).values
         high_mask = true >= threshold
         high_flow_mae = _safe_mean(abs_err[high_mask])
     else:

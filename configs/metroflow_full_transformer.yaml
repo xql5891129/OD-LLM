@@ -10,4 +10,6 @@ data:
 
 train:
   batch_size: 4
-
+  amp: true
+  amp_dtype: bf16
+  compute_train_metrics: false

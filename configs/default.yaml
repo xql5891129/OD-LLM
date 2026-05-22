@@ -30,6 +30,7 @@ train:
   patience: 5
   amp: false
   amp_dtype: bf16
+  compute_train_metrics: false
 
 model:
   name: od_tensor_transformer
@@ -51,6 +52,7 @@ loss:
 metrics:
   topk: 20
   high_flow_quantile: 0.9
+  high_flow_max_samples: 1000000
   zero_threshold: 0.0
   pred_positive_threshold: 0.5
 
