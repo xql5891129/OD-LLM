@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+import json
 
 
 @dataclass
@@ -73,8 +74,31 @@ def load_od_array(cfg: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, dict[str
         od = np.load(path).astype(np.float32)
         if od.ndim != 3 or od.shape[1] != od.shape[2]:
             raise ValueError(f"Expected npy shape [T, N, N], got {od.shape}")
-        time_features = _time_features_from_index(od.shape[0])
-        meta["times"] = None
+        time_features_path = cfg.get("time_features_path")
+        if time_features_path is None:
+            candidate = path.parent / "time_features.npy"
+            time_features_path = candidate if candidate.exists() else None
+        if time_features_path is not None:
+            time_features = np.load(time_features_path).astype(np.float32)
+            if time_features.shape[0] != od.shape[0]:
+                raise ValueError(
+                    f"time_features length {time_features.shape[0]} does not match OD length {od.shape[0]}"
+                )
+            columns_path = Path(time_features_path).with_name("time_features_columns.json")
+            if columns_path.exists():
+                with columns_path.open("r", encoding="utf-8") as f:
+                    meta["time_features_columns"] = json.load(f)
+        else:
+            time_features = _time_features_from_index(od.shape[0])
+        times_path = cfg.get("times_path")
+        if times_path is None:
+            candidate = path.parent / "times.csv"
+            times_path = candidate if candidate.exists() else None
+        if times_path is not None:
+            time_df = pd.read_csv(times_path)
+            meta["times"] = time_df["time"].astype(str).tolist() if "time" in time_df.columns else None
+        else:
+            meta["times"] = None
         return od, time_features, meta
 
     if fmt == "csv":

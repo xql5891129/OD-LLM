@@ -98,8 +98,62 @@ uv run --no-sync python src/train.py --config configs/local_qwen2_5_1_5b.yaml
 
 ## Public OD Data
 
-Put downloaded public trip files under `data/raw/...`, then convert them to
-`od.npy`:
+For this project, use MetroFlow first. It is the closest public proxy for bus
+OD forecasting because it is public transit, station-level, directional OD, and
+continuous over time.
+
+Download MetroFlow, then put these files under `data/raw/metroflow/`:
+
+```text
+stationInfo.csv
+metroData_InOutFlow.csv
+metroData_ODFlow.csv
+shanghai_weatherHourly.csv
+work_calendar.csv
+```
+
+Convert the OD flow file to a manageable top-80 station test set:
+
+```powershell
+uv run --no-sync python scripts/prepare_metroflow.py `
+  --raw-dir data/MetroFlow `
+  --output-dir data/metroflow_top80 `
+  --top-n 80 `
+  --flow-type total `
+  --overwrite
+```
+
+The full 302-station dense array is larger, but supported:
+
+```powershell
+uv run --no-sync python scripts/prepare_metroflow.py `
+  --raw-dir data/MetroFlow `
+  --output-dir data/metroflow_full `
+  --top-n 0 `
+  --flow-type total `
+  --overwrite
+```
+
+Run MetroFlow experiments:
+
+```powershell
+uv run --no-sync python src/train.py --config configs/metroflow_top80_transformer.yaml
+uv run --no-sync python src/train.py --config configs/metroflow_top80_qwen.yaml
+```
+
+For a metadata-only check before scanning the 12GB OD file:
+
+```powershell
+uv run --no-sync python scripts/prepare_metroflow.py `
+  --raw-dir data/MetroFlow `
+  --output-dir outputs/metroflow_profile `
+  --top-n 80 `
+  --profile-only `
+  --overwrite
+```
+
+For other public trip files, put downloaded files under `data/raw/...`, then
+convert them to `od.npy`:
 
 ```powershell
 uv run --no-sync python scripts/prepare_public_od.py `

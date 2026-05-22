@@ -16,6 +16,22 @@ uv run --no-sync python scripts/generate_toy_data.py --output data/toy/od.npy
 Public trip data can be converted to the same `od.npy` format. Examples:
 
 ```bash
+# Shanghai MetroFlow OD file. Use top-n for a manageable first experiment.
+uv run --no-sync python scripts/prepare_metroflow.py \
+  --raw-dir data/MetroFlow \
+  --output-dir data/metroflow_top80 \
+  --top-n 80 \
+  --flow-type total \
+  --overwrite
+
+# Full 302-station MetroFlow. This creates a large dense OD array.
+uv run --no-sync python scripts/prepare_metroflow.py \
+  --raw-dir data/MetroFlow \
+  --output-dir data/metroflow_full \
+  --top-n 0 \
+  --flow-type total \
+  --overwrite
+
 # Citi Bike / Capital Bikeshare monthly CSV or ZIP files
 uv run --no-sync python scripts/prepare_public_od.py \
   --source citibike \

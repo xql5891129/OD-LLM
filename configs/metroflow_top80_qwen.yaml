@@ -1,0 +1,10 @@
+inherits: real_od_qwen.yaml
+
+experiment:
+  name: od_llm_qwen_metroflow_top80
+
+data:
+  path: data/metroflow_top80/od.npy
+  input_len: 12
+  pred_len: 3
+

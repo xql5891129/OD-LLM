@@ -11,6 +11,12 @@ import pandas as pd
 
 
 SOURCE_DEFAULTS = {
+    "metroflow": {
+        "time_col": "time",
+        "origin_col": "origin",
+        "destination_col": "destination",
+        "flow_col": "flow",
+    },
     "citibike": {
         "time_col": "started_at",
         "origin_col": "start_station_id",
@@ -46,6 +52,45 @@ SOURCE_DEFAULTS = {
         "origin_col": "origin",
         "destination_col": "destination",
         "flow_col": "flow",
+    },
+}
+
+
+SOURCE_NOTES = {
+    "metroflow": {
+        "mode": "metro public transit",
+        "closeness": "highest",
+        "note": "Shanghai MetroFlow. Best public proxy for bus OD forecasting: station-level transit OD, 10-minute resolution, weather/workday metadata. Download manually from Figshare/GitHub, then convert if needed.",
+    },
+    "mta_subway_od": {
+        "mode": "metro public transit",
+        "closeness": "high",
+        "note": "NYC MTA subway OD ridership. Public transit OD, but aggregated by month/day/hour rather than a continuous daily time series.",
+    },
+    "generic": {
+        "mode": "any long-form OD",
+        "closeness": "depends",
+        "note": "Use for your own bus OD CSV or any file with time/origin/destination/flow columns.",
+    },
+    "nyc_taxi": {
+        "mode": "taxi",
+        "closeness": "medium",
+        "note": "Zone-level OD with real urban demand, good for large OD stress tests but not public transit.",
+    },
+    "chicago_taxi": {
+        "mode": "taxi",
+        "closeness": "medium",
+        "note": "Zone/community-area OD, smaller than NYC taxi and easy to test.",
+    },
+    "citibike": {
+        "mode": "bike sharing",
+        "closeness": "low-medium",
+        "note": "Station OD and easy CSV format, useful for code tests but travel behavior differs from bus.",
+    },
+    "capital_bikeshare": {
+        "mode": "bike sharing",
+        "closeness": "low-medium",
+        "note": "Same role as Citi Bike: convenient station OD engineering test.",
     },
 }
 
@@ -144,6 +189,76 @@ def normalize_mta_subway_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _first_existing_column(lower_to_col: dict[str, str], names: list[str]) -> str | None:
+    for name in names:
+        key = name.lower().strip()
+        if key in lower_to_col:
+            return lower_to_col[key]
+    return None
+
+
+def normalize_metroflow_columns(df: pd.DataFrame, flow_type: str = "total") -> pd.DataFrame:
+    """Normalize Shanghai MetroFlow OD data columns.
+
+    The OD flow file described by MetroFlow uses Date, Slot, StartTime,
+    EndTime, O-Station, D-Station, CFlow, HFlow, and NFlow. This function is
+    deliberately tolerant to minor header variants so exported CSV files remain
+    easy to process.
+    """
+    lower_to_col = {col.lower().strip(): col for col in df.columns}
+    slot_col = _first_existing_column(lower_to_col, ["Slot", "slot"])
+    date_col = _first_existing_column(lower_to_col, ["Date", "date"])
+    start_col = _first_existing_column(lower_to_col, ["StartTime", "Start Time", "start_time", "starttime"])
+    origin_col = _first_existing_column(lower_to_col, ["O-Station", "O_Station", "OStation", "origin", "o_station"])
+    dest_col = _first_existing_column(
+        lower_to_col,
+        ["D-Station", "D_Station", "DStation", "destination", "d_station"],
+    )
+    if origin_col is None or dest_col is None:
+        raise ValueError(f"Cannot find MetroFlow OD station columns in: {list(df.columns)}")
+
+    normalized = pd.DataFrame()
+    if date_col and start_col:
+        normalized["time"] = df[date_col].astype(str).str.strip() + " " + df[start_col].astype(str).str.strip()
+    elif slot_col:
+        normalized["time"] = pd.to_numeric(df[slot_col], errors="coerce")
+    else:
+        time_col = _first_existing_column(lower_to_col, ["time", "timestamp", "datetime"])
+        if time_col is None:
+            raise ValueError(f"Cannot find MetroFlow time columns in: {list(df.columns)}")
+        normalized["time"] = df[time_col]
+
+    normalized["origin"] = df[origin_col]
+    normalized["destination"] = df[dest_col]
+
+    flow_type = flow_type.lower()
+    flow_candidates = {
+        "c": ["CFlow", "cflow", "commuting_flow"],
+        "h": ["HBOFlow", "HFlow", "hboflow", "hflow", "home_based_other_flow"],
+        "n": ["NHBFlow", "NFlow", "nhbflow", "nflow", "non_home_based_flow", "none_home_based_flow"],
+        "total": ["Flow", "flow", "ODFlow", "od_flow", "total_flow"],
+    }
+    if flow_type in {"c", "h", "n"}:
+        col = _first_existing_column(lower_to_col, flow_candidates[flow_type])
+        if col is None:
+            raise ValueError(f"Cannot find MetroFlow {flow_type.upper()}Flow column in: {list(df.columns)}")
+        normalized["flow"] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+    else:
+        total_col = _first_existing_column(lower_to_col, flow_candidates["total"])
+        if total_col:
+            normalized["flow"] = pd.to_numeric(df[total_col], errors="coerce").fillna(0.0)
+        else:
+            flow_cols = [
+                _first_existing_column(lower_to_col, flow_candidates[name])
+                for name in ["c", "h", "n"]
+            ]
+            flow_cols = [col for col in flow_cols if col is not None]
+            if not flow_cols:
+                raise ValueError(f"Cannot find MetroFlow flow columns in: {list(df.columns)}")
+            normalized["flow"] = df[flow_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).sum(axis=1)
+    return normalized
+
+
 def load_trip_tables(args: argparse.Namespace) -> pd.DataFrame:
     defaults = SOURCE_DEFAULTS[args.source]
     time_col = args.time_col or defaults["time_col"]
@@ -154,7 +269,7 @@ def load_trip_tables(args: argparse.Namespace) -> pd.DataFrame:
     columns = [time_col, origin_col, dest_col]
     if flow_col:
         columns.append(flow_col)
-    if args.source == "mta_subway_od":
+    if args.source in {"mta_subway_od", "metroflow"}:
         columns = None
 
     frames = []
@@ -163,6 +278,9 @@ def load_trip_tables(args: argparse.Namespace) -> pd.DataFrame:
         frame = read_table(path, columns=columns, max_rows=remaining)
         if args.source == "mta_subway_od":
             frame = normalize_mta_subway_columns(frame)
+            time_col, origin_col, dest_col, flow_col = "time", "origin", "destination", "flow"
+        elif args.source == "metroflow":
+            frame = normalize_metroflow_columns(frame, flow_type=args.metroflow_flow)
             time_col, origin_col, dest_col, flow_col = "time", "origin", "destination", "flow"
         frame = frame.rename(columns={time_col: "time", origin_col: "origin", dest_col: "destination"})
         if flow_col and flow_col in frame.columns:
@@ -183,11 +301,17 @@ def load_trip_tables(args: argparse.Namespace) -> pd.DataFrame:
 
 
 def build_od_array(df: pd.DataFrame, freq: str, top_n: int | None) -> tuple[np.ndarray, pd.DataFrame, pd.DataFrame]:
+    numeric_time = pd.to_numeric(df["time"], errors="coerce")
     parsed_time = pd.to_datetime(df["time"], errors="coerce")
-    if parsed_time.notna().all():
-        df = df.assign(time=parsed_time.dt.floor(freq).astype(str))
+    if numeric_time.notna().all():
+        df = df.assign(time=numeric_time.astype(int).astype(str), _time_order=numeric_time.astype(float))
+    elif parsed_time.notna().all():
+        floored_time = parsed_time.dt.floor(freq)
+        df = df.assign(time=floored_time.astype(str), _time_order=floored_time.astype("int64"))
     else:
         df = df.assign(time=df["time"].astype(str))
+        ordered = {value: idx for idx, value in enumerate(sorted(df["time"].unique()))}
+        df["_time_order"] = df["time"].map(ordered).astype(float)
 
     df["origin"] = df["origin"].astype(str)
     df["destination"] = df["destination"].astype(str)
@@ -205,7 +329,12 @@ def build_od_array(df: pd.DataFrame, freq: str, top_n: int | None) -> tuple[np.n
         keep_nodes = set(node_flow.sort_values("total", ascending=False).head(top_n).index.astype(str))
         df = df[df["origin"].isin(keep_nodes) & df["destination"].isin(keep_nodes)]
 
-    times = sorted(df["time"].unique())
+    times = (
+        df[["time", "_time_order"]]
+        .drop_duplicates()
+        .sort_values(["_time_order", "time"])["time"]
+        .tolist()
+    )
     nodes = sorted(pd.unique(pd.concat([df["origin"], df["destination"]], ignore_index=True)))
     time_to_idx = {time: idx for idx, time in enumerate(times)}
     node_to_idx = {node: idx for idx, node in enumerate(nodes)}
@@ -223,8 +352,8 @@ def build_od_array(df: pd.DataFrame, freq: str, top_n: int | None) -> tuple[np.n
 def main() -> None:
     parser = argparse.ArgumentParser(description="Convert public trip/OD data to OD-LLM od.npy format.")
     parser.add_argument("--source", choices=sorted(SOURCE_DEFAULTS), default="generic")
-    parser.add_argument("--input", nargs="+", required=True, help="CSV, ZIP, parquet file, or directory.")
-    parser.add_argument("--output-dir", type=str, required=True)
+    parser.add_argument("--input", nargs="+", default=None, help="CSV, ZIP, parquet file, or directory.")
+    parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--freq", type=str, default="30min")
     parser.add_argument("--top-n", type=int, default=None)
     parser.add_argument("--max-rows", type=int, default=None)
@@ -232,8 +361,19 @@ def main() -> None:
     parser.add_argument("--origin-col", type=str, default=None)
     parser.add_argument("--destination-col", type=str, default=None)
     parser.add_argument("--flow-col", type=str, default=None)
+    parser.add_argument("--metroflow-flow", choices=["total", "c", "h", "n"], default="total")
     parser.add_argument("--drop-self-loops", action="store_true")
+    parser.add_argument("--print-sources", action="store_true")
     args = parser.parse_args()
+
+    if args.print_sources:
+        print(json.dumps(SOURCE_NOTES, indent=2, ensure_ascii=False))
+        return
+
+    if not args.input:
+        raise ValueError("--input is required unless --print-sources is used.")
+    if not args.output_dir:
+        raise ValueError("--output-dir is required unless --print-sources is used.")
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
