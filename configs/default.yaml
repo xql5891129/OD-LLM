@@ -28,6 +28,8 @@ train:
   weight_decay: 0.0001
   grad_clip: 5.0
   patience: 5
+  amp: false
+  amp_dtype: bf16
 
 model:
   name: od_tensor_transformer

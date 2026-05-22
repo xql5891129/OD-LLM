@@ -3,6 +3,11 @@ inherits: default.yaml
 experiment:
   name: od_llm_qwen
 
+train:
+  batch_size: 2
+  amp: true
+  amp_dtype: bf16
+
 model:
   name: od_llm
   rank: 4
@@ -15,6 +20,7 @@ model:
   pretrained_path: Qwen/Qwen2.5-1.5B
   local_files_only: true
   trust_remote_code: true
+  torch_dtype: bf16
   freeze_llm: true
   use_reprogramming: true
   num_virtual_prompt_tokens: 8

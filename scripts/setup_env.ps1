@@ -33,7 +33,7 @@ function Invoke-Checked {
 }
 
 Write-Host "Syncing Python environment with uv..."
-Invoke-Checked { uv sync --extra download }
+Invoke-Checked { uv sync --extra download --extra data }
 
 if ($TorchBackend -ne "skip") {
     $TorchIndex = switch ($TorchBackend) {

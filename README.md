@@ -78,6 +78,94 @@ After installing a CUDA torch wheel with the setup script, prefer `uv run
 --no-sync ...` for experiments. This prevents uv from re-syncing the lockfile
 and replacing the CUDA wheel with the default CPU wheel.
 
+After setup, run the smoke workflow first:
+
+```powershell
+.\scripts\run_smoke.ps1
+```
+
+Linux:
+
+```bash
+bash scripts/run_smoke.sh
+```
+
+Then start the local Qwen OD-LLM experiment:
+
+```powershell
+uv run --no-sync python src/train.py --config configs/local_qwen2_5_1_5b.yaml
+```
+
+## Public OD Data
+
+Put downloaded public trip files under `data/raw/...`, then convert them to
+`od.npy`:
+
+```powershell
+uv run --no-sync python scripts/prepare_public_od.py `
+  --source citibike `
+  --input data/raw/citibike `
+  --output-dir data/public_citibike `
+  --freq 30min `
+  --top-n 80 `
+  --max-rows 500000
+```
+
+For NYC taxi parquet files:
+
+```powershell
+uv run --no-sync python scripts/prepare_public_od.py `
+  --source nyc_taxi `
+  --input data/raw/nyc_taxi `
+  --output-dir data/public_nyc_taxi `
+  --freq 30min `
+  --top-n 80 `
+  --max-rows 1000000
+```
+
+Then point a config to the generated file:
+
+```yaml
+data:
+  format: npy
+  path: data/public_citibike/od.npy
+```
+
+Ready-made configs are also provided:
+
+```powershell
+uv run --no-sync python src/train.py --config configs/public_citibike_transformer.yaml
+uv run --no-sync python src/train.py --config configs/public_citibike_qwen.yaml
+uv run --no-sync python src/train.py --config configs/public_nyc_taxi_transformer.yaml
+uv run --no-sync python src/train.py --config configs/public_nyc_taxi_qwen.yaml
+```
+
+## Experiment Suites
+
+Run all baseline experiments:
+
+```powershell
+.\scripts\run_suite.ps1 -Suite configs/suite_baselines.yaml -BaseConfig configs/real_od_transformer.yaml
+```
+
+Run OD-LLM ablations:
+
+```powershell
+.\scripts\run_suite.ps1 -Suite configs/suite_ablation.yaml -BaseConfig configs/real_od_qwen.yaml
+```
+
+Run the full paper experiment pipeline:
+
+```powershell
+.\scripts\run_paper_experiments.ps1
+```
+
+For a quick syntax check without training:
+
+```powershell
+.\scripts\run_suite.ps1 -Suite configs/suite_baselines.yaml -DryRun
+```
+
 For users in mainland China, ModelScope may be smoother:
 
 ```powershell

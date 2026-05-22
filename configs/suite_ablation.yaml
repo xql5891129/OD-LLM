@@ -1,0 +1,46 @@
+suite_name: ablation
+base_config: configs/real_od_qwen.yaml
+
+experiments:
+  - name: od_llm_rank_2
+    model:
+      rank: 2
+
+  - name: od_llm_rank_4
+    model:
+      rank: 4
+
+  - name: od_llm_rank_8
+    model:
+      rank: 8
+
+  - name: od_tensor_transformer_rank_4
+    model:
+      name: od_tensor_transformer
+      rank: 4
+      d_model: 64
+      n_heads: 4
+      num_layers: 2
+      dim_feedforward: 128
+    train:
+      batch_size: 16
+      amp: false
+
+  - name: od_llm_no_reprogramming
+    model:
+      use_reprogramming: false
+
+  - name: od_llm_no_sparse_terms
+    loss:
+      alpha: 1.0
+      beta: 0.0
+      gamma: 0.0
+
+  - name: od_llm_source_tokens_256
+    model:
+      num_source_tokens: 256
+
+  - name: od_llm_source_tokens_2000
+    model:
+      num_source_tokens: 2000
+

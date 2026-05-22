@@ -89,6 +89,11 @@ def write_local_config(
 experiment:
   name: {experiment_name}
 
+train:
+  batch_size: 2
+  amp: true
+  amp_dtype: bf16
+
 model:
   name: od_llm
   rank: {rank}
@@ -103,6 +108,7 @@ model:
   pretrained: true
   local_files_only: true
   trust_remote_code: true
+  torch_dtype: bf16
 
   llm_dim: {spec["llm_dim"]}
   llm_layers: {llm_layers}

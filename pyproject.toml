@@ -30,6 +30,9 @@ download = [
     "huggingface-hub>=0.24",
     "modelscope>=1.19",
 ]
+data = [
+    "pyarrow>=16.0",
+]
 
 [tool.uv]
 package = false

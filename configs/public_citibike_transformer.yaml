@@ -1,0 +1,8 @@
+inherits: real_od_transformer.yaml
+
+experiment:
+  name: od_tensor_transformer_public_citibike
+
+data:
+  path: data/public_citibike/od.npy
+

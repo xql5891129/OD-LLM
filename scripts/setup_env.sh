@@ -54,7 +54,7 @@ echo "Using project root: $PROJECT_ROOT"
 echo "Using UV_CACHE_DIR: $UV_CACHE_DIR"
 
 echo "Syncing Python environment with uv..."
-uv sync --extra download
+uv sync --extra download --extra data
 
 case "$TORCH_BACKEND" in
   skip)

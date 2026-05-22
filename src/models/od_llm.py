@@ -40,6 +40,7 @@ class ODLLM(nn.Module):
         pretrained_path: str | None = None,
         local_files_only: bool = True,
         trust_remote_code: bool = True,
+        torch_dtype: str | None = "auto",
         freeze_llm: bool = True,
         use_reprogramming: bool = False,
         num_virtual_prompt_tokens: int = 8,
@@ -74,6 +75,7 @@ class ODLLM(nn.Module):
             pretrained_path=pretrained_path,
             local_files_only=local_files_only,
             trust_remote_code=trust_remote_code,
+            torch_dtype=torch_dtype,
             llm_dim=llm_dim,
             llm_layers=llm_layers,
             llm_heads=llm_heads,
@@ -114,6 +116,7 @@ class ODLLM(nn.Module):
         pretrained_path: str | None,
         local_files_only: bool,
         trust_remote_code: bool,
+        torch_dtype: str | None,
         llm_dim: int,
         llm_layers: int,
         llm_heads: int,
@@ -150,12 +153,22 @@ class ODLLM(nn.Module):
         self._try_set_num_layers(config, llm_layers)
         config.output_hidden_states = False
         config.output_attentions = False
-        backbone = AutoModel.from_pretrained(
-            model_name_or_path,
-            config=config,
-            local_files_only=local_files_only,
-            trust_remote_code=trust_remote_code,
-        )
+        dtype_arg = self._resolve_torch_dtype(torch_dtype)
+        model_kwargs = {
+            "config": config,
+            "local_files_only": local_files_only,
+            "trust_remote_code": trust_remote_code,
+        }
+        if dtype_arg is not None:
+            model_kwargs["torch_dtype"] = dtype_arg
+
+        try:
+            backbone = AutoModel.from_pretrained(model_name_or_path, **model_kwargs)
+        except TypeError:
+            if "torch_dtype" not in model_kwargs:
+                raise
+            model_kwargs["dtype"] = model_kwargs.pop("torch_dtype")
+            backbone = AutoModel.from_pretrained(model_name_or_path, **model_kwargs)
         hidden_size = self._infer_hidden_size(config, backbone)
         source_embeddings = backbone.get_input_embeddings().weight[:num_source_tokens].detach().float()
         return backbone, hidden_size, source_embeddings
@@ -182,6 +195,23 @@ class ODLLM(nn.Module):
             return next(model.parameters()).dtype
         except StopIteration:
             return torch.float32
+
+    @staticmethod
+    def _resolve_torch_dtype(dtype_name: str | None):
+        if dtype_name is None:
+            return None
+        value = str(dtype_name).lower()
+        if value in {"none", "null", "false"}:
+            return None
+        if value == "auto":
+            return "auto"
+        if value in {"bf16", "bfloat16"}:
+            return torch.bfloat16
+        if value in {"fp16", "float16", "half"}:
+            return torch.float16
+        if value in {"fp32", "float32", "float"}:
+            return torch.float32
+        raise ValueError(f"Unsupported torch_dtype: {dtype_name}")
 
     def _adapt_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
         if isinstance(self.input_adapter, ReprogrammingLayer):

@@ -15,10 +15,12 @@ def _safe_mean(values: torch.Tensor) -> torch.Tensor:
 def compute_metrics(
     pred: torch.Tensor,
     true: torch.Tensor,
+    y_time: torch.Tensor | None = None,
     topk: int = 20,
     high_flow_quantile: float = 0.9,
     zero_threshold: float = 0.0,
     pred_positive_threshold: float = 0.5,
+    peak_hours: tuple[int, ...] = (7, 8, 9, 17, 18, 19),
 ) -> dict[str, float]:
     """Compute OD metrics.
 
@@ -28,6 +30,8 @@ def compute_metrics(
     """
     pred = pred.detach().float().cpu()
     true = true.detach().float().cpu()
+    if y_time is not None:
+        y_time = y_time.detach().float().cpu()
     abs_err = (pred - true).abs()
     sq_err = (pred - true).pow(2)
 
@@ -63,7 +67,7 @@ def compute_metrics(
     else:
         zero_false_positive_rate = pred.new_tensor(0.0)
 
-    return {
+    metrics = {
         "mae": float(mae.item()),
         "rmse": float(rmse.item()),
         "wape": float(wape.item()),
@@ -72,6 +76,32 @@ def compute_metrics(
         "high_flow_mae": float(high_flow_mae.item()),
         "zero_false_positive_rate": float(zero_false_positive_rate.item()),
     }
+
+    if y_time is not None and y_time.shape[-1] >= 5:
+        day_phase = torch.atan2(y_time[..., 0], y_time[..., 1])
+        hour = ((day_phase % (2 * math.pi)) / (2 * math.pi) * 24).floor().long()
+        peak_tensor = torch.tensor(peak_hours, dtype=torch.long)
+        peak_mask = (hour.unsqueeze(-1) == peak_tensor).any(dim=-1)
+        offpeak_mask = ~peak_mask
+        weekend_mask = y_time[..., 4] > 0.5
+        weekday_mask = ~weekend_mask
+
+        def time_mask_mae(mask: torch.Tensor) -> float:
+            if not mask.any():
+                return 0.0
+            expanded = mask[..., None, None].expand_as(abs_err)
+            return float(abs_err[expanded].mean().item())
+
+        metrics.update(
+            {
+                "peak_hour_mae": time_mask_mae(peak_mask),
+                "offpeak_mae": time_mask_mae(offpeak_mask),
+                "weekend_mae": time_mask_mae(weekend_mask),
+                "weekday_mae": time_mask_mae(weekday_mask),
+            }
+        )
+
+    return metrics
 
 
 def format_metrics(metrics: dict[str, Any]) -> str:

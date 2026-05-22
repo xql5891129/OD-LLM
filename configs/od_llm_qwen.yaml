@@ -3,6 +3,11 @@ inherits: default.yaml
 experiment:
   name: od_llm_qwen_toy
 
+train:
+  batch_size: 2
+  amp: true
+  amp_dtype: bf16
+
 model:
   name: od_llm
   rank: 4
@@ -20,6 +25,7 @@ model:
   pretrained: true
   local_files_only: true
   trust_remote_code: true
+  torch_dtype: bf16
 
   # These are used for adapter shapes before the HF model is loaded.
   # The real hidden size is inferred from the loaded config.

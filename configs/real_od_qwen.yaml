@@ -1,10 +1,22 @@
 inherits: default.yaml
 
 experiment:
-  name: od_llm_qwen2_5_1_5b_local
+  name: od_llm_qwen_real
+
+data:
+  format: npy
+  path: data/real/od.npy
+  input_len: 12
+  pred_len: 3
+  train_ratio: 0.7
+  val_ratio: 0.1
+  test_ratio: 0.2
 
 train:
   batch_size: 2
+  epochs: 20
+  learning_rate: 0.001
+  patience: 5
   amp: true
   amp_dtype: bf16
 
@@ -18,7 +30,10 @@ model:
   max_tokens: 4096
 
   llm_model: qwen2.5-1.5b
-  pretrained_path: "C:/Users/Mayn/Desktop/工作二/OD-LLM/hf_models/qwen2.5-1.5b"
+  # If you used scripts/download_model.py, prefer the generated
+  # configs/local_*.yaml path. This relative path is valid for HuggingFace
+  # downloads created by the default setup script.
+  pretrained_path: hf_models/qwen2.5-1.5b
   pretrained: true
   local_files_only: true
   trust_remote_code: true
@@ -31,3 +46,4 @@ model:
   use_reprogramming: true
   num_virtual_prompt_tokens: 8
   num_source_tokens: 1000
+
