@@ -22,11 +22,32 @@ def write_config(config: dict[str, Any], path: Path) -> None:
         yaml.safe_dump(config, f, sort_keys=False, allow_unicode=True)
 
 
-def run_command(command: list[str], dry_run: bool) -> None:
+def run_command(command: list[str], dry_run: bool, log_path: Path | None = None) -> int:
     print(" ".join(command))
     if dry_run:
-        return
-    subprocess.run(command, cwd=ROOT, check=True)
+        return 0
+    if log_path is None:
+        completed = subprocess.run(command, cwd=ROOT)
+        return int(completed.returncode)
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
+        log_file.write(" ".join(command) + "\n\n")
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="")
+            log_file.write(line)
+        return int(process.wait())
 
 
 def main() -> None:
@@ -37,6 +58,8 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--python", type=str, default=sys.executable)
     parser.add_argument("--skip-compare", action="store_true")
+    parser.add_argument("--continue-on-error", action="store_true")
+    parser.add_argument("--log-dir", type=str, default=None)
     args = parser.parse_args()
 
     suite_path = Path(args.suite)
@@ -47,7 +70,9 @@ def main() -> None:
     base_cfg = load_config(base_config_path)
     suite_name = suite.get("suite_name", suite_path.stem)
     generated_dir = ROOT / "outputs" / "_generated_configs" / suite_name
+    log_dir = Path(args.log_dir) if args.log_dir else ROOT / "outputs" / "suite_logs" / suite_name
     selected = set(args.only or [])
+    failures: list[tuple[str, int, Path]] = []
 
     experiments = suite.get("experiments", [])
     if not experiments:
@@ -61,14 +86,33 @@ def main() -> None:
         cfg.setdefault("experiment", {})["name"] = name
         config_path = generated_dir / f"{name}.yaml"
         write_config(cfg, config_path)
-        run_command([args.python, "src/train.py", "--config", str(config_path)], dry_run=args.dry_run)
+        log_path = log_dir / f"{name}.log"
+        return_code = run_command(
+            [args.python, "src/train.py", "--config", str(config_path)],
+            dry_run=args.dry_run,
+            log_path=log_path,
+        )
+        if return_code != 0:
+            failures.append((name, return_code, log_path))
+            print(f"Experiment failed: {name}, exit_code={return_code}, log={log_path}")
+            if not args.continue_on_error:
+                raise SystemExit(return_code)
 
     if not args.skip_compare:
         output = ROOT / "outputs" / f"{suite_name}_comparison.csv"
-        run_command(
+        return_code = run_command(
             [args.python, "src/compare.py", "--root", "outputs", "--output", str(output)],
             dry_run=args.dry_run,
+            log_path=log_dir / "compare.log",
         )
+        if return_code != 0:
+            failures.append(("compare", return_code, log_dir / "compare.log"))
+
+    if failures:
+        print("Failed experiments:")
+        for name, return_code, log_path in failures:
+            print(f"  {name}: exit_code={return_code}, log={log_path}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

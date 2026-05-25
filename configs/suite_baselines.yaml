@@ -7,12 +7,14 @@ experiments:
       name: last_value
     train:
       epochs: 1
+      amp: false
 
   - name: baseline_historical_average
     model:
       name: historical_average
     train:
       epochs: 1
+      amp: false
 
   - name: baseline_gru
     model:
@@ -21,8 +23,9 @@ experiments:
       num_layers: 2
       dim_feedforward: 256
     train:
-      batch_size: 8
+      batch_size: 4
       epochs: 30
+      amp: false
 
   - name: baseline_lstm
     model:
@@ -31,8 +34,9 @@ experiments:
       num_layers: 2
       dim_feedforward: 256
     train:
-      batch_size: 8
+      batch_size: 4
       epochs: 30
+      amp: false
 
   - name: baseline_tcn
     model:
@@ -44,6 +48,7 @@ experiments:
     train:
       batch_size: 8
       epochs: 30
+      amp: false
 
   - name: baseline_flatten_transformer
     model:
@@ -55,6 +60,7 @@ experiments:
     train:
       batch_size: 8
       epochs: 30
+      amp: false
 
   - name: baseline_od_tensor_transformer
     model:
@@ -67,3 +73,5 @@ experiments:
     train:
       batch_size: 16
       epochs: 50
+      amp: true
+      amp_dtype: bf16

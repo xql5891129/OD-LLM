@@ -32,7 +32,7 @@ def build_model(cfg: dict, num_nodes: int) -> torch.nn.Module:
         num_nodes=num_nodes,
         input_len=int(data_cfg["input_len"]),
         pred_len=int(data_cfg["pred_len"]),
-        rank=int(model_cfg["rank"]),
+        rank=int(model_cfg.get("rank", 4)),
         d_model=int(model_cfg["d_model"]),
         dim_feedforward=int(model_cfg["dim_feedforward"]),
         dropout=float(model_cfg["dropout"]),

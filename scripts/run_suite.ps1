@@ -2,7 +2,8 @@ param(
     [string]$Suite = "configs/suite_baselines.yaml",
     [string]$BaseConfig = "",
     [string[]]$Only = @(),
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$ContinueOnError
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,6 +21,9 @@ if ($Only.Count -gt 0) {
 }
 if ($DryRun) {
     $ArgsList += "--dry-run"
+}
+if ($ContinueOnError) {
+    $ArgsList += "--continue-on-error"
 }
 
 & uv @ArgsList

@@ -4,6 +4,7 @@ set -euo pipefail
 SUITE="configs/suite_baselines.yaml"
 BASE_CONFIG=""
 DRY_RUN=0
+CONTINUE_ON_ERROR=0
 ONLY=()
 
 while [[ $# -gt 0 ]]; do
@@ -27,6 +28,10 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=1
       shift
       ;;
+    --continue-on-error)
+      CONTINUE_ON_ERROR=1
+      shift
+      ;;
     *)
       echo "Unknown argument: $1"
       exit 1
@@ -47,6 +52,9 @@ if [[ ${#ONLY[@]} -gt 0 ]]; then
 fi
 if [[ "$DRY_RUN" == "1" ]]; then
   ARGS+=(--dry-run)
+fi
+if [[ "$CONTINUE_ON_ERROR" == "1" ]]; then
+  ARGS+=(--continue-on-error)
 fi
 
 uv "${ARGS[@]}"
