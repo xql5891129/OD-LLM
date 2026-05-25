@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,13 +16,33 @@ SRC_DIR = ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from utils.config import deep_update, load_config  # noqa: E402
+from utils.config import deep_update, load_config, prepare_output_dirs  # noqa: E402
 
 
 def write_config(config: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(config, f, sort_keys=False, allow_unicode=True)
+
+
+def expected_metrics_path(config: dict[str, Any]) -> Path:
+    cfg = copy.deepcopy(config)
+    prepare_output_dirs(cfg)
+    path = Path(cfg["outputs"]["logs"]) / "test_metrics.json"
+    return path if path.is_absolute() else ROOT / path
+
+
+def metrics_written_after(path: Path, started_at: float) -> bool:
+    if not path.exists():
+        return False
+    if path.stat().st_mtime < started_at:
+        return False
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return "test_loss" in payload and "test_metrics" in payload
+    except (OSError, json.JSONDecodeError):
+        return False
 
 
 def run_command(command: list[str], dry_run: bool, log_path: Path | None = None) -> int:
@@ -86,6 +109,8 @@ def main() -> None:
         cfg.setdefault("experiment", {})["name"] = name
         config_path = generated_dir / f"{name}.yaml"
         write_config(cfg, config_path)
+        started_at = time.time()
+        metrics_path = expected_metrics_path(cfg)
         log_path = log_dir / f"{name}.log"
         return_code = run_command(
             [args.python, "src/train.py", "--config", str(config_path)],
@@ -93,6 +118,12 @@ def main() -> None:
             log_path=log_path,
         )
         if return_code != 0:
+            if metrics_written_after(metrics_path, started_at):
+                print(
+                    f"Experiment finished but process exited with {return_code}; "
+                    f"fresh metrics found at {metrics_path}. Treating as success."
+                )
+                continue
             failures.append((name, return_code, log_path))
             print(f"Experiment failed: {name}, exit_code={return_code}, log={log_path}")
             if not args.continue_on_error:
