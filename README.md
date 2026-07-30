@@ -5,6 +5,17 @@ origin-destination demand forecasting. The model combines POI-guided OD tensor
 tokenization, calendar and weather context, a frozen Qwen backbone, a
 multi-scale sparse OD decoder, and sparse OD supervision.
 
+## Model Overview
+
+<p align="center">
+  <img src="assets/model_structure.png" alt="OD-LLM model architecture" width="100%">
+</p>
+
+The workflow maps historical OD matrices to compact OD tokens through a
+learnable bilateral projection, reprograms them into the pretrained LLM
+embedding space, and decodes future sparse OD matrices with periodic, low-rank,
+pair-wise, and occurrence-aware components.
+
 ## Repository Contents
 
 ```text
