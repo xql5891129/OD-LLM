@@ -11,6 +11,11 @@ from typing import Any
 
 import yaml
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(errors="replace")
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "src"
 if str(SRC_DIR) not in sys.path:
@@ -83,6 +88,7 @@ def main() -> None:
     parser.add_argument("--skip-compare", action="store_true")
     parser.add_argument("--continue-on-error", action="store_true")
     parser.add_argument("--log-dir", type=str, default=None)
+    parser.add_argument("--run-tag", type=str, default=None)
     args = parser.parse_args()
 
     suite_path = Path(args.suite)
@@ -92,6 +98,8 @@ def main() -> None:
     base_config_path = Path(args.base_config or suite.get("base_config", "configs/default.yaml"))
     base_cfg = load_config(base_config_path)
     suite_name = suite.get("suite_name", suite_path.stem)
+    if args.run_tag:
+        suite_name = f"{suite_name}_{args.run_tag}"
     generated_dir = ROOT / "outputs" / "_generated_configs" / suite_name
     log_dir = Path(args.log_dir) if args.log_dir else ROOT / "outputs" / "suite_logs" / suite_name
     selected = set(args.only or [])
@@ -130,9 +138,12 @@ def main() -> None:
                 raise SystemExit(return_code)
 
     if not args.skip_compare:
-        output = ROOT / "outputs" / f"{suite_name}_comparison.csv"
+        compare_root = Path(base_cfg.get("outputs", {}).get("root", "outputs"))
+        if not compare_root.is_absolute():
+            compare_root = ROOT / compare_root
+        output = compare_root / f"{suite_name}_comparison.csv"
         return_code = run_command(
-            [args.python, "src/compare.py", "--root", "outputs", "--output", str(output)],
+            [args.python, "src/compare.py", "--root", str(compare_root), "--output", str(output)],
             dry_run=args.dry_run,
             log_path=log_dir / "compare.log",
         )

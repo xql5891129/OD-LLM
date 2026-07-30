@@ -11,6 +11,9 @@ from torch.utils.data import Dataset
 import json
 
 
+TIME_COLUMNS = ["tod_sin", "tod_cos", "dow_sin", "dow_cos", "is_weekend"]
+
+
 @dataclass
 class ODTransform:
     name: str = "none"
@@ -65,13 +68,53 @@ def _time_features_from_datetimes(times: pd.Series) -> np.ndarray:
     ).astype(np.float32)
 
 
+def _select_time_features(
+    time_features: np.ndarray,
+    columns: list[str],
+    mode: str,
+    selected_columns: list[str] | None = None,
+) -> tuple[np.ndarray, list[str]]:
+    """Select time/context features by experiment mode.
+
+    The first five columns are always calendar features:
+    tod_sin, tod_cos, dow_sin, dow_cos, is_weekend.
+    """
+    mode = mode.lower()
+    if mode in {"all", "full"}:
+        return time_features, columns
+    if mode in {"calendar", "time", "time_only"}:
+        return time_features[:, :5], columns[:5]
+
+    if mode in {"core_weather", "weather_core"}:
+        keep_names = {
+            "weather_temperature_c_z",
+            "weather_precip_mm_z",
+            "weather_wind_speed_ms_z",
+            "weather_is_rainy",
+        }
+        selected_columns = [*columns[:5], *[col for col in columns[5:] if col in keep_names]]
+    elif mode in {"selected", "custom"}:
+        if not selected_columns:
+            raise ValueError("data.time_features_mode=selected requires data.time_feature_columns.")
+        selected_columns = selected_columns
+    else:
+        raise ValueError(f"Unsupported data.time_features_mode: {mode}")
+
+    column_to_idx = {name: idx for idx, name in enumerate(columns)}
+    missing = [name for name in selected_columns if name not in column_to_idx]
+    if missing:
+        raise ValueError(f"Selected time feature columns not found: {missing}")
+    indices = [column_to_idx[name] for name in selected_columns]
+    return time_features[:, indices], list(selected_columns)
+
+
 def load_od_array(cfg: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     fmt = cfg["format"].lower()
     path = Path(cfg["path"])
     meta: dict[str, Any] = {}
 
     if fmt == "npy":
-        od = np.load(path).astype(np.float32)
+        od = np.load(path, mmap_mode=cfg.get("mmap_mode")).astype(np.float32, copy=False)
         if od.ndim != 3 or od.shape[1] != od.shape[2]:
             raise ValueError(f"Expected npy shape [T, N, N], got {od.shape}")
         time_features_path = cfg.get("time_features_path")
@@ -88,8 +131,17 @@ def load_od_array(cfg: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, dict[str
             if columns_path.exists():
                 with columns_path.open("r", encoding="utf-8") as f:
                     meta["time_features_columns"] = json.load(f)
+            columns = meta.get("time_features_columns") or [f"feature_{idx}" for idx in range(time_features.shape[1])]
+            time_features, columns = _select_time_features(
+                time_features,
+                columns,
+                mode=str(cfg.get("time_features_mode", "all")),
+                selected_columns=cfg.get("time_feature_columns"),
+            )
+            meta["time_features_columns"] = columns
         else:
             time_features = _time_features_from_index(od.shape[0])
+            meta["time_features_columns"] = list(TIME_COLUMNS)
         times_path = cfg.get("times_path")
         if times_path is None:
             candidate = path.parent / "times.csv"
@@ -133,6 +185,38 @@ def load_od_array(cfg: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, dict[str
     raise ValueError(f"Unsupported data format: {fmt}")
 
 
+def load_poi_features(cfg: dict[str, Any], num_nodes: int) -> tuple[np.ndarray | None, list[str]]:
+    """Load optional station-level POI/static features.
+
+    Returns:
+        poi_features: [N, F] float32, or None when absent/disabled.
+        columns: POI feature column names if available.
+    """
+    if not bool(cfg.get("use_poi_features", False)):
+        return None, []
+
+    path = cfg.get("poi_features_path")
+    if path is None:
+        od_path = Path(cfg["path"])
+        candidate = od_path.parent / "poi_features.npy"
+        path = candidate if candidate.exists() else None
+    if path is None:
+        raise FileNotFoundError("data.use_poi_features=true but poi_features.npy was not found.")
+
+    poi = np.load(path).astype(np.float32, copy=False)
+    if poi.ndim != 2:
+        raise ValueError(f"Expected poi features shape [N,F], got {poi.shape}")
+    if poi.shape[0] != num_nodes:
+        raise ValueError(f"POI feature node count {poi.shape[0]} does not match OD N={num_nodes}")
+
+    columns: list[str] = []
+    columns_path = Path(path).with_name("poi_feature_columns.json")
+    if columns_path.exists():
+        with columns_path.open("r", encoding="utf-8") as f:
+            columns = json.load(f)
+    return poi, columns
+
+
 class ODDataset(Dataset):
     """Chronological OD sliding-window dataset.
 
@@ -151,14 +235,19 @@ class ODDataset(Dataset):
         self.split = split
         self.input_len = int(cfg["input_len"])
         self.pred_len = int(cfg["pred_len"])
+        self.prev_lag = int(cfg.get("prev_lag", 0))
         self.transform = ODTransform(cfg.get("transform", "none"))
 
         od_raw, time_features, meta = load_od_array(cfg)
         self.raw_od = od_raw
-        self.od = self.transform.transform(od_raw).astype(np.float32)
+        self.od = self.transform.transform(od_raw).astype(np.float32, copy=False)
         self.time_features = time_features.astype(np.float32)
         self.meta = meta
         self.num_nodes = int(self.od.shape[1])
+        poi_features, poi_columns = load_poi_features(cfg, self.num_nodes)
+        self.poi_features = poi_features
+        self.poi_feature_dim = 0 if poi_features is None else int(poi_features.shape[1])
+        self.meta["poi_feature_columns"] = poi_columns
         self.total_steps = int(self.od.shape[0])
 
         train_ratio = float(cfg.get("train_ratio", 0.7))
@@ -190,14 +279,27 @@ class ODDataset(Dataset):
         x_end = start + self.input_len
         y_start = x_end
         y_end = y_start + self.pred_len
+        prev_x_start = x_start - self.prev_lag
+        prev_y_start = y_start - self.prev_lag
+        if self.prev_lag > 0 and prev_x_start >= 0 and prev_y_start >= 0:
+            prev_x = self.od[prev_x_start : prev_x_start + self.input_len]
+            prev_y = self.od[prev_y_start : prev_y_start + self.pred_len]
+            prev_valid = True
+        else:
+            prev_x = self.od[x_start:x_end]
+            prev_y = self.od[y_start:y_end]
+            prev_valid = False
 
         return {
             "x": torch.from_numpy(self.od[x_start:x_end]),          # [L, N, N]
             "y": torch.from_numpy(self.od[y_start:y_end]),          # [H, N, N]
+            "prev_x": torch.from_numpy(prev_x),                     # [L, N, N]
+            "prev_y": torch.from_numpy(prev_y),                     # [H, N, N]
             "x_time": torch.from_numpy(self.time_features[x_start:x_end]),
             "y_time": torch.from_numpy(self.time_features[y_start:y_end]),
             "sample_index": torch.tensor(index, dtype=torch.long),
             "target_start": torch.tensor(y_start, dtype=torch.long),
+            "prev_valid": torch.tensor(prev_valid, dtype=torch.bool),
         }
 
     def inverse_transform(self, tensor: torch.Tensor) -> torch.Tensor:

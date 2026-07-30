@@ -6,7 +6,7 @@ PROVIDER="${PROVIDER:-huggingface}"
 OUTPUT_DIR="${OUTPUT_DIR:-hf_models}"
 LLM_LAYERS="${LLM_LAYERS:-6}"
 SKIP_MODEL="${SKIP_MODEL:-0}"
-TORCH_BACKEND="${TORCH_BACKEND:-cu130}"
+TORCH_BACKEND="${TORCH_BACKEND:-cu128}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -43,9 +43,28 @@ done
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
+export PATH="$HOME/.local/bin:$HOME/miniconda3/bin:/root/miniconda3/bin:$PATH"
 
 if ! command -v uv >/dev/null 2>&1; then
-  echo "uv is not installed or not on PATH. Install uv first: https://docs.astral.sh/uv/"
+  echo "uv is not installed; installing it with pip..."
+  PYTHON_BIN="${PYTHON_BIN:-}"
+  if [[ -z "$PYTHON_BIN" ]] && command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3)"
+  fi
+  if [[ -z "$PYTHON_BIN" ]] && command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python)"
+  fi
+  if [[ -z "$PYTHON_BIN" ]] && [[ -x /root/miniconda3/bin/python ]]; then
+    PYTHON_BIN="/root/miniconda3/bin/python"
+  fi
+  if [[ -z "$PYTHON_BIN" ]]; then
+    echo "No Python executable found for installing uv."
+    exit 1
+  fi
+  "$PYTHON_BIN" -m pip install -U uv
+fi
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is still not on PATH. Install uv first: https://docs.astral.sh/uv/"
   exit 1
 fi
 
@@ -95,10 +114,9 @@ echo "Running a quick compile check..."
 uv run --no-sync python -m compileall src scripts
 
 echo "Checking PyTorch CUDA visibility..."
-uv run --no-sync python scripts/check_cuda.py
+uv run --no-sync python -c "import torch; print(f\"CUDA available={torch.cuda.is_available()} | device={torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}\")"
 
 echo ""
 echo "Setup finished."
-echo "Try a smoke test:"
-echo "  uv run --no-sync python scripts/generate_toy_data.py --output data/toy/od.npy"
-echo "  uv run --no-sync python src/train.py --config configs/od_llm_tiny.yaml"
+echo "Check the final experiment config:"
+echo "  bash scripts/line_bus/run_main.sh --region guangdianyuan --granularity 60 --dry-run --skip-compare"

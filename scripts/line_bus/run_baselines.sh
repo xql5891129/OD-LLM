@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SUITE="configs/line_bus/suite_baselines.yaml"
-BASE_CONFIG=""
+REGION="guangdianyuan"
+GRANULARITY="60"
 DRY_RUN=0
 CONTINUE_ON_ERROR=0
 SKIP_COMPARE=0
-PYTHON_BIN=""
-LOG_DIR=""
-ONLY=()
+ONLY=(ha lstm transformer odmixer odcrn)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --suite)
-      SUITE="$2"
+    --region)
+      REGION="$2"
       shift 2
       ;;
-    --base-config)
-      BASE_CONFIG="$2"
+    --granularity)
+      GRANULARITY="$2"
       shift 2
       ;;
     --only)
+      ONLY=()
       shift
       while [[ $# -gt 0 && "$1" != --* ]]; do
         ONLY+=("$1")
@@ -39,14 +38,6 @@ while [[ $# -gt 0 ]]; do
       SKIP_COMPARE=1
       shift
       ;;
-    --python)
-      PYTHON_BIN="$2"
-      shift 2
-      ;;
-    --log-dir)
-      LOG_DIR="$2"
-      shift 2
-      ;;
     *)
       echo "Unknown argument: $1"
       exit 1
@@ -54,14 +45,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$PROJECT_ROOT"
-export UV_CACHE_DIR="$PROJECT_ROOT/.uv-cache"
-
-ARGS=(run --no-sync python scripts/run_experiment_suite.py --suite "$SUITE")
-if [[ -n "$BASE_CONFIG" ]]; then
-  ARGS+=(--base-config "$BASE_CONFIG")
-fi
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+BASE_CONFIG="configs/line_bus/${REGION}_${GRANULARITY}_base.yaml"
+ARGS=(--suite configs/line_bus/suite_baselines.yaml --base-config "$BASE_CONFIG")
 if [[ ${#ONLY[@]} -gt 0 ]]; then
   ARGS+=(--only "${ONLY[@]}")
 fi
@@ -74,11 +60,5 @@ fi
 if [[ "$SKIP_COMPARE" == "1" ]]; then
   ARGS+=(--skip-compare)
 fi
-if [[ -n "$PYTHON_BIN" ]]; then
-  ARGS+=(--python "$PYTHON_BIN")
-fi
-if [[ -n "$LOG_DIR" ]]; then
-  ARGS+=(--log-dir "$LOG_DIR")
-fi
 
-uv "${ARGS[@]}"
+bash "$PROJECT_ROOT/scripts/run_suite.sh" "${ARGS[@]}"

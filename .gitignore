@@ -8,11 +8,13 @@ build/
 # Virtual environment
 .venv/
 venv/
+.uv-cache/
 
 # Large model files (download separately on server)
 hf_models/
 
-# Training outputs
+# Local datasets and training artifacts
+/data/
 outputs/
 
 # IDE
@@ -26,4 +28,3 @@ Thumbs.db
 # Logs
 *.log
 wandb/
-data/

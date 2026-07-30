@@ -9,7 +9,7 @@ import pandas as pd
 
 def collect_results(root: Path) -> pd.DataFrame:
     rows = []
-    for metrics_path in sorted(root.glob("*/logs/test_metrics.json")):
+    for metrics_path in sorted(root.glob("**/logs/test_metrics.json")):
         run_name = metrics_path.parents[1].name
         with metrics_path.open("r", encoding="utf-8") as f:
             payload = json.load(f)
@@ -40,4 +40,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

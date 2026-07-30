@@ -1,0 +1,12 @@
+inherits: daxuecheng_60_base.yaml
+
+experiment:
+  name: daxuecheng_line30_base
+
+outputs:
+  root: outputs/line_bus/daxuecheng_30min
+
+data:
+  root: data/processed_line_bus/daxuecheng/30min
+  pred_len: 6
+  prev_lag: 48

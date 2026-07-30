@@ -30,6 +30,12 @@ MODEL_REGISTRY = {
         "llm_dim": 2048,
         "llm_heads": 16,
     },
+    "qwen3.5-4b": {
+        "hf_id": "Qwen/Qwen3.5-4B",
+        "modelscope_id": "Qwen/Qwen3.5-4B",
+        "llm_dim": 2560,
+        "llm_heads": 16,
+    },
     "deepseek-r1-distill-qwen-1.5b": {
         "hf_id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
         "modelscope_id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",

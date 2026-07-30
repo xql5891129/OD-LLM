@@ -1,0 +1,101 @@
+suite_name: baselines
+base_config: configs/metro/metroflow_top80_base.yaml
+
+experiments:
+  - name: ha
+    model:
+      name: historical_average
+    train:
+      epochs: 1
+      batch_size: 16
+      amp: false
+
+  - name: lstm
+    model:
+      name: lstm_baseline
+      d_model: 128
+      num_layers: 2
+      dim_feedforward: 256
+    train:
+      batch_size: 4
+      epochs: 30
+      learning_rate: 0.001
+      monitor_metric: mae
+      amp: false
+
+  - name: tcn
+    model:
+      name: tcn_baseline
+      d_model: 128
+      num_layers: 3
+      kernel_size: 3
+      dim_feedforward: 256
+    train:
+      batch_size: 8
+      epochs: 30
+      learning_rate: 0.001
+      monitor_metric: mae
+      amp: false
+
+  - name: transformer
+    model:
+      name: transformer_flatten
+      d_model: 128
+      n_heads: 4
+      num_layers: 2
+      dim_feedforward: 256
+    train:
+      batch_size: 8
+      epochs: 30
+      learning_rate: 0.001
+      monitor_metric: mae
+      amp: false
+
+  - name: odmixer
+    data:
+      prev_lag: 144
+    model:
+      name: odmixer
+      d_model: 16
+      hidden_dim: 16
+      num_layers: 5
+      layer_nums: 5
+      dim_feedforward: 64
+      dropout: 0.1
+      prev_od_mode: lag1
+      output_activation: softplus_shift
+      auxiliary_loss_weight: 1.0
+    train:
+      batch_size: 16
+      epochs: 80
+      learning_rate: 0.001
+      weight_decay: 0.0
+      patience: 20
+      monitor_metric: mae
+      amp: true
+      amp_dtype: fp16
+
+  - name: odcrn
+    model:
+      name: odcrn
+      d_model: 16
+      hidden_dim: 16
+      num_layers: 2
+      dim_feedforward: 64
+      cheby_order: 2
+      kernel_type: random_walk_diffusion
+      static_graph_mode: batch_od
+      use_dynamic_graph: true
+      output_activation: softplus
+      input_transform: log1p
+      inverse_output: true
+      log_output_max: 8.0
+    train:
+      batch_size: 4
+      epochs: 40
+      learning_rate: 0.0003
+      weight_decay: 0.0
+      patience: 12
+      monitor_metric: mae
+      amp: false
+      amp_dtype: fp16

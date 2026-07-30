@@ -1,0 +1,10 @@
+inherits: guangdianyuan_60_base.yaml
+
+experiment:
+  name: daxuecheng_line60_base
+
+outputs:
+  root: outputs/line_bus/daxuecheng_60min
+
+data:
+  root: data/processed_line_bus/daxuecheng/60min

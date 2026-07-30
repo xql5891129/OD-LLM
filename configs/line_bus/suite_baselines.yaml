@@ -1,0 +1,91 @@
+suite_name: line_bus_baselines
+base_config: configs/line_bus/guangdianyuan_60_base.yaml
+
+experiments:
+  - name: ha
+    model:
+      name: historical_average
+    train:
+      epochs: 1
+      batch_size: 64
+      amp: false
+
+  - name: lstm
+    model:
+      name: lstm_baseline
+      d_model: 128
+      num_layers: 2
+      dim_feedforward: 256
+      dropout: 0.1
+    train:
+      batch_size: 32
+      epochs: 30
+      learning_rate: 0.001
+      patience: 10
+      monitor_metric: rmse
+      amp: true
+      amp_dtype: fp16
+
+  - name: transformer
+    model:
+      name: transformer_flatten
+      d_model: 128
+      n_heads: 4
+      num_layers: 2
+      dim_feedforward: 256
+      dropout: 0.1
+    train:
+      batch_size: 32
+      epochs: 30
+      learning_rate: 0.001
+      patience: 10
+      monitor_metric: rmse
+      amp: true
+      amp_dtype: fp16
+
+  - name: odmixer
+    model:
+      name: odmixer
+      d_model: 32
+      hidden_dim: 32
+      num_layers: 5
+      layer_nums: 5
+      dim_feedforward: 64
+      dropout: 0.1
+      prev_od_mode: lag1
+      output_activation: softplus_shift
+      auxiliary_loss_weight: 0.5
+    train:
+      batch_size: 32
+      epochs: 50
+      learning_rate: 0.001
+      weight_decay: 0.0
+      patience: 12
+      monitor_metric: rmse
+      amp: true
+      amp_dtype: fp16
+
+  - name: odcrn
+    model:
+      name: odcrn
+      d_model: 32
+      hidden_dim: 32
+      num_layers: 2
+      dim_feedforward: 64
+      cheby_order: 2
+      kernel_type: random_walk_diffusion
+      static_graph_mode: batch_od
+      use_dynamic_graph: true
+      output_activation: softplus_shift
+      input_transform: log1p
+      inverse_output: true
+      log_output_max: 8.0
+    train:
+      batch_size: 16
+      epochs: 40
+      learning_rate: 0.0002
+      weight_decay: 0.0
+      patience: 12
+      monitor_metric: rmse
+      amp: false
+      amp_dtype: fp16

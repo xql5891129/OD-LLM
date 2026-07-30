@@ -1,0 +1,166 @@
+suite_name: line_bus_ablation
+base_config: configs/line_bus/guangdianyuan_60_base.yaml
+
+x_od_llm_data: &od_llm_data
+  use_poi_features: true
+  time_features_mode: core_weather
+
+x_od_llm_train: &od_llm_train
+  batch_size: 12
+  learning_rate: 0.00005
+  epochs: 4
+  patience: 3
+  init_checkpoint: previous_best
+  init_experiment: od_llm
+  init_local_experiment: odmixer
+  evaluate_initial_checkpoint: true
+  monitor_metric: rmse
+  amp: true
+  amp_dtype: bf16
+  compute_train_metrics: false
+  stream_metrics: true
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 4
+  allow_tf32: true
+  grad_clip: 0.25
+  sanitize_nonfinite: true
+  skip_nonfinite_batches: true
+  max_nonfinite_batches: 20
+  prediction_clip: 1000.0
+
+x_od_llm_model: &od_llm_model
+  name: od_llm
+  rank: 10
+  d_model: 96
+  n_heads: 4
+  dim_feedforward: 256
+  dropout: 0.1
+  max_tokens: 4096
+  decoder_mode: residual_seasonal
+  decoder_scale: 0.25
+  delta_limit: 12.0
+  zero_init_decoder: true
+  use_pair_trend_head: false
+  pair_input_transform: log1p
+  use_decoder_pair_gate: false
+  use_full_rank_pair_decoder: true
+  full_rank_hidden_dim: 64
+  full_rank_base_gate_init: 0.8
+  full_rank_delta_scale: 1.0
+  full_rank_delta_limit: 12.0
+  use_marginal_features: true
+  use_relative_pair_delta: true
+  relative_pair_delta_limit: 1.0
+  use_sparse_hurdle_head: true
+  occurrence_init: 0.5
+  occurrence_prior_scale: 1.0
+  occurrence_temperature: 1.0
+  use_local_od_mixer: true
+  local_mixer_hidden_dim: 32
+  local_mixer_layers: 5
+  local_mixer_softplus_beta: 10.0
+  freeze_local_od_mixer: true
+  train_local_global_gate_only: false
+  residual_activation: softplus_shift
+  softplus_beta: 2.0
+  seasonal_blend_init: 0.8
+  learnable_seasonal_blend: false
+  use_context_base_gate: false
+  context_pooling: horizon_attention
+  horizon_attention_heads: 12
+  llm_model: qwen2.5-1.5b
+  pretrained_path: hf_models/qwen2.5-1.5b
+  pretrained: true
+  local_files_only: true
+  trust_remote_code: true
+  torch_dtype: bf16
+  attn_implementation: sdpa
+  llm_dim: 1536
+  llm_layers: 4
+  llm_heads: 12
+  freeze_llm: true
+  llm_trainable_layers: 0
+  llm_trainable_layer_norm: false
+  llm_trainable_fp32: true
+  llm_gradient_checkpointing: false
+  use_reprogramming: true
+  use_time_features: true
+  time_features_mode: core_weather
+  use_poi_features: true
+  dynamic_poi_features: true
+  poi_projection_scale: 0.1
+  token_value_transform: signed_log1p
+  num_virtual_prompt_tokens: 8
+  num_source_tokens: 512
+
+x_od_llm_loss: &od_llm_loss
+  use_od_mask: true
+  alpha: 1.0
+  beta: 0.8
+  gamma: 0.6
+  topk: 20
+  nonzero_threshold: 0.0
+  mse_weight: 0.08
+  nonzero_mse_weight: 0.0
+  topk_mse_weight: 0.012
+  occurrence_loss_weight: 0.08
+  occurrence_positive_weight: 0.8
+  magnitude_loss_weight: 0.04
+  magnitude_mse_weight: 0.004
+
+x_od_llm_metrics: &od_llm_metrics
+  report_keys: [mae, rmse, wape]
+
+experiments:
+  - name: no_poi
+    data:
+      <<: *od_llm_data
+      use_poi_features: false
+    train: *od_llm_train
+    model:
+      <<: *od_llm_model
+      use_poi_features: false
+      dynamic_poi_features: false
+    loss: *od_llm_loss
+    metrics: *od_llm_metrics
+
+  - name: no_weather
+    data:
+      <<: *od_llm_data
+    train: *od_llm_train
+    model:
+      <<: *od_llm_model
+      time_features_mode: calendar
+    loss: *od_llm_loss
+    metrics: *od_llm_metrics
+
+  - name: local_only
+    data: *od_llm_data
+    train:
+      <<: *od_llm_train
+      epochs: 0
+      init_checkpoint: none
+      evaluate_initial_checkpoint: true
+    model:
+      <<: *od_llm_model
+      pretrained: false
+      llm_model: mini_gpt
+      llm_dim: 96
+      llm_layers: 1
+      llm_heads: 4
+      freeze_llm: true
+      use_reprogramming: false
+      num_source_tokens: 0
+    loss: *od_llm_loss
+    metrics: *od_llm_metrics
+
+  - name: no_sparse_hurdle
+    data: *od_llm_data
+    train: *od_llm_train
+    model:
+      <<: *od_llm_model
+      use_sparse_hurdle_head: false
+    loss: *od_llm_loss
+    metrics: *od_llm_metrics

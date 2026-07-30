@@ -1,8 +1,0 @@
-inherits: real_od_transformer.yaml
-
-experiment:
-  name: od_tensor_transformer_public_nyc_taxi
-
-data:
-  path: data/public_nyc_taxi/od.npy
-

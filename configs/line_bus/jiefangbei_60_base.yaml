@@ -1,0 +1,10 @@
+inherits: guangdianyuan_60_base.yaml
+
+experiment:
+  name: jiefangbei_line60_base
+
+outputs:
+  root: outputs/line_bus/jiefangbei_60min
+
+data:
+  root: data/processed_line_bus/jiefangbei/60min

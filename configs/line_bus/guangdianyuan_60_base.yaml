@@ -1,0 +1,70 @@
+inherits: ../common/default.yaml
+device: cuda
+
+experiment:
+  name: guangdianyuan_line60_base
+
+outputs:
+  root: outputs/line_bus/guangdianyuan_60min
+
+data:
+  dataset_type: line_bus
+  root: data/processed_line_bus/guangdianyuan/60min
+  input_len: 12
+  pred_len: 3
+  prev_lag: 24
+  train_ratio: 0.7
+  val_ratio: 0.1
+  test_ratio: 0.2
+  time_features_mode: core_weather
+  use_poi_features: false
+  max_nodes: auto
+  enabled_only: true
+  sample_stride: 1
+
+train:
+  batch_size: 16
+  epochs: 30
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  patience: 10
+  monitor_metric: rmse
+  amp: true
+  amp_dtype: fp16
+  compute_train_metrics: false
+  stream_metrics: true
+
+model:
+  name: transformer_flatten
+  rank: 12
+  d_model: 128
+  n_heads: 4
+  num_layers: 2
+  dim_feedforward: 256
+  dropout: 0.1
+  max_tokens: 4096
+  decoder_mode: residual_last
+  residual_activation: softplus_shift
+  softplus_beta: 10.0
+
+loss:
+  use_od_mask: true
+  alpha: 1.0
+  beta: 1.0
+  gamma: 1.0
+  topk: 20
+  nonzero_threshold: 0.0
+  mse_weight: 0.02
+  nonzero_mse_weight: 0.0
+  topk_mse_weight: 0.004
+
+metrics:
+  use_od_mask: true
+  report_keys: [mae, rmse, wape]
+  topk: 20
+  high_flow_quantile: 0.9
+  high_flow_max_samples: 1000000
+  zero_threshold: 0.0
+  pred_positive_threshold: 0.5
+  rainy_feature_index: -1
+  rainy_threshold: 0.5

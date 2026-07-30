@@ -6,7 +6,7 @@ param(
     [switch]$SkipModel,
     [int]$LlmLayers = 6,
     [ValidateSet("skip", "cpu", "cu128", "cu130")]
-    [string]$TorchBackend = "cu130"
+    [string]$TorchBackend = "cu128"
 )
 
 $ErrorActionPreference = "Stop"
@@ -62,10 +62,9 @@ Write-Host "Running a quick compile check..."
 Invoke-Checked { uv run --no-sync python -m compileall src scripts }
 
 Write-Host "Checking PyTorch CUDA visibility..."
-Invoke-Checked { uv run --no-sync python scripts/check_cuda.py }
+Invoke-Checked { uv run --no-sync python -c "import torch; print(f'CUDA available={torch.cuda.is_available()} | device={torch.cuda.get_device_name(0) if torch.cuda.is_available() else \'CPU\'}')" }
 
 Write-Host ""
 Write-Host "Setup finished."
-Write-Host "Try a smoke test:"
-Write-Host "  uv run --no-sync python scripts/generate_toy_data.py --output data/toy/od.npy"
-Write-Host "  uv run --no-sync python src/train.py --config configs/od_llm_tiny.yaml"
+Write-Host "Check the final experiment config:"
+Write-Host "  .\scripts\line_bus\run_main.ps1 -Region guangdianyuan -Granularity 60 -DryRun -SkipCompare"

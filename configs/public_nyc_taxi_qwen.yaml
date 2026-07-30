@@ -1,8 +1,0 @@
-inherits: real_od_qwen.yaml
-
-experiment:
-  name: od_llm_qwen_public_nyc_taxi
-
-data:
-  path: data/public_nyc_taxi/od.npy
-
