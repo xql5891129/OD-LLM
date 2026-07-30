@@ -114,7 +114,7 @@ echo "Running a quick compile check..."
 uv run --no-sync python -m compileall src scripts
 
 echo "Checking PyTorch CUDA visibility..."
-uv run --no-sync python -c "import torch; print(f\"CUDA available={torch.cuda.is_available()} | device={torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}\")"
+uv run --no-sync python -c "import torch; print('CUDA available={} | device={}'.format(torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'))"
 
 echo ""
 echo "Setup finished."

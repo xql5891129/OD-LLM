@@ -62,7 +62,7 @@ Write-Host "Running a quick compile check..."
 Invoke-Checked { uv run --no-sync python -m compileall src scripts }
 
 Write-Host "Checking PyTorch CUDA visibility..."
-Invoke-Checked { uv run --no-sync python -c "import torch; print(f'CUDA available={torch.cuda.is_available()} | device={torch.cuda.get_device_name(0) if torch.cuda.is_available() else \'CPU\'}')" }
+Invoke-Checked { uv run --no-sync python -c "import torch; print('CUDA available={} | device={}'.format(torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'))" }
 
 Write-Host ""
 Write-Host "Setup finished."
